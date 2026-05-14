@@ -37,17 +37,6 @@ type AutomatonCanvasProp = {
   /** Result status for highlighting the final state after simulation */
   resultStatus?: 'accepted' | 'rejected' | null | undefined;
 
-  /**
-   * Every transition that will fire on the next step. For DFAs there's
-   * at most one; for NFAs there can be 0..N. All matching edges glow
-   * blue so the user sees parallel branches about to fire.
-   */
-  nextTransitions?: ReadonlyArray<{
-    fromStateId: number;
-    toStateId: number;
-    symbol: string;
-  }> | undefined;
-
   /** State IDs whose branches died on the most recent step — pulse red. */
   dyingStateIds?: ReadonlySet<number> | undefined;
 
@@ -170,6 +159,15 @@ type AutomatonCanvasProp = {
   creationSourceId?: number | null | undefined;
   creationDestinationId?: number | null | undefined;
   creationStateKind?: 'add' | 'modify' | null | undefined;
+
+  /**
+   * Highlight the start-state arrow. True while the user is on SIMULATE
+   * and the automaton is "at the start" — either no simulation has been
+   * initialised yet, or the simulation is at step 0 and not finished.
+   * After the first step (or once a finished sim is parked), the arrow
+   * returns to its idle (black + breathing) style.
+   */
+  startArrowHighlighted?: boolean | undefined;
 };
 
 export function AutomatonCanvas({
@@ -177,7 +175,6 @@ export function AutomatonCanvas({
   automatonUI,
   activeStateIds,
   resultStatus,
-  nextTransitions,
   dyingStateIds,
   firedTransitions,
   simulationStepIndex,
@@ -191,6 +188,7 @@ export function AutomatonCanvas({
   creationSourceId,
   creationDestinationId,
   creationStateKind,
+  startArrowHighlighted,
   bottomRightExtras,
   onShowTour,
   debugOverlay = false,
@@ -493,17 +491,6 @@ export function AutomatonCanvas({
         <g>
       {/* Layer 1: Transition edges (background) */}
       {automatonUI.transitions.map((transition, index) => {
-        // A consolidated edge matches the simulation's "next transition"
-        // set if any (currentState, symbol → dest) tuple matches one of
-        // its underlying symbols. Multiple matches → still one highlight.
-        const isNextTransition = nextTransitions !== undefined
-          && nextTransitions.some(
-            (next) =>
-              next.fromStateId === transition.fromStateId &&
-              next.toStateId === transition.toStateId &&
-              transition.symbols.some((s) => s === next.symbol)
-          );
-
         const isHighlighted =
           highlightedTransition !== null
           && highlightedTransition !== undefined
@@ -548,7 +535,6 @@ export function AutomatonCanvas({
             arrowheadPosition={transition.arrowheadPosition}
             arrowheadAngle={transition.arrowheadAngle}
             labelPosition={transition.labelPosition}
-            isNextTransition={isNextTransition}
             isHighlighted={isHighlighted}
             justFired={justFired}
             previewKind={matchingPreview?.kind}
@@ -628,7 +614,10 @@ export function AutomatonCanvas({
           brief layout-debounce frames before the first computeLayout
           resolves; render nothing in that window. */}
       {automatonUI.startArrow !== null && (
-        <StartStateArrow geometry={automatonUI.startArrow} />
+        <StartStateArrow
+          geometry={automatonUI.startArrow}
+          isHighlighted={startArrowHighlighted ?? false}
+        />
       )}
           {/* DEBUG (gated by debugOverlay): blue ring at the FA's
               center (state-cluster centroid in inner-g local coords).

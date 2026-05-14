@@ -253,31 +253,45 @@ describe('CommandBar — Tools (Operations) menu in EDIT segment', () => {
   });
 });
 
-describe('CommandBar — SIMULATE segment (Export)', () => {
-  it('shows Export pill in VIEWING', () => {
-    const { getByLabelText } = render(
+describe('CommandBar — Export merged into File menu', () => {
+  it('lists PNG and SVG items inside the File menu when handlers are provided', () => {
+    const { getByLabelText, getByText } = render(
       <CommandBar {...makeProps({ onExportPNG: vi.fn(), onExportSVG: vi.fn() })} />
     );
-    expect(getByLabelText('Export')).toBeTruthy();
+    fireEvent.click(getByLabelText('File menu'));
+    expect(getByText('Export as image')).toBeTruthy();
+    expect(getByText('PNG image')).toBeTruthy();
+    expect(getByText('SVG image')).toBeTruthy();
   });
 
-  it('shows Export pill in SIMULATING', () => {
-    const { getByLabelText } = render(
-      <CommandBar
-        {...makeProps({ appMode: 'SIMULATING', onExportPNG: vi.fn(), onExportSVG: vi.fn() })}
-      />
+  it('omits the export section entirely when no handlers are provided', () => {
+    const { getByLabelText, queryByText } = render(
+      <CommandBar {...makeProps()} />
     );
-    expect(getByLabelText('Export')).toBeTruthy();
+    fireEvent.click(getByLabelText('File menu'));
+    expect(queryByText('Export as image')).toBeNull();
+    expect(queryByText('PNG image')).toBeNull();
+    expect(queryByText('SVG image')).toBeNull();
   });
 
-  it('hides Export pill in DEFINING / EDITING (edit-focused stages)', () => {
-    for (const mode of ['DEFINING', 'EDITING'] as const) {
-      const { queryByLabelText, unmount } = render(
-        <CommandBar
-          {...makeProps({ appMode: mode, onExportPNG: vi.fn(), onExportSVG: vi.fn() })}
-        />
+  it('PNG click invokes onExportPNG with the transparent toggle value', () => {
+    const onExportPNG = vi.fn();
+    const { getByLabelText, getByText } = render(
+      <CommandBar {...makeProps({ onExportPNG, onExportSVG: vi.fn() })} />
+    );
+    fireEvent.click(getByLabelText('File menu'));
+    fireEvent.click(getByText('PNG image'));
+    expect(onExportPNG).toHaveBeenCalledTimes(1);
+    expect(onExportPNG).toHaveBeenCalledWith(false);
+  });
+
+  it('Export items remain available regardless of app mode (File is global)', () => {
+    for (const mode of ['DEFINING', 'EDITING', 'SIMULATING', 'VIEWING'] as const) {
+      const { getByLabelText, getByText, unmount } = render(
+        <CommandBar {...makeProps({ appMode: mode, onExportPNG: vi.fn(), onExportSVG: vi.fn() })} />
       );
-      expect(queryByLabelText('Export')).toBeNull();
+      fireEvent.click(getByLabelText('File menu'));
+      expect(getByText('PNG image')).toBeTruthy();
       unmount();
     }
   });

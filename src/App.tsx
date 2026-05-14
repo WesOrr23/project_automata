@@ -748,7 +748,6 @@ function App() {
   }
 
   function ensureInitialized(): boolean {
-    if (inputString.length === 0) return false;
     if (sim.simulation === null || sim.status === 'finished') {
       sim.initialize(inputString);
     }
@@ -951,8 +950,17 @@ function App() {
           id: 'nfa-to-dfa',
           label: 'Convert to DFA',
           icon: <Shuffle size={16} strokeWidth={2} />,
-          enabled: automaton.type === 'NFA',
-          ...(automaton.type !== 'NFA' ? { title: 'Already a DFA' } : {}),
+          // Disabled for DFAs (already converted) and for NFAs with an
+          // empty alphabet (subset construction has nothing to enumerate).
+          // The alphabet check mirrors `convertNfaToDfa`'s precondition so
+          // the user sees the constraint before clicking, not as a toast
+          // afterwards.
+          enabled: automaton.type === 'NFA' && automaton.alphabet.size > 0,
+          ...(automaton.type !== 'NFA'
+            ? { title: 'Already a DFA' }
+            : automaton.alphabet.size === 0
+              ? { title: 'Add a symbol to the alphabet first' }
+              : {}),
           onClick: handleConvertToDfa,
         },
         {
@@ -1073,12 +1081,10 @@ function App() {
         alphabet={automaton.alphabet}
         input={inputString}
         onInputChange={handleInputChange}
-        onOpenBatchTest={() => setBatchTestOpen(true)}
       />
       <SimulationControls
         status={sim.status}
         hasSimulation={sim.simulation !== null}
-        hasInput={inputString.length > 0}
         accepted={sim.accepted}
         speed={sim.speed}
         input={inputString}
@@ -1135,6 +1141,7 @@ function App() {
         onUndo={undo}
         onRedo={redo}
         operationsCategories={operationsCategories}
+        onOpenBatchTest={() => setBatchTestOpen(true)}
       />
 
       <Onboarding visible={onboarding.visible} onDismiss={onboarding.dismiss} />
@@ -1206,10 +1213,14 @@ function App() {
             automatonUI={automatonUI}
             activeStateIds={appMode === 'SIMULATING' ? sim.currentStateIds : undefined}
             resultStatus={appMode === 'SIMULATING' ? resultStatus : null}
-            nextTransitions={appMode === 'SIMULATING' ? sim.nextTransitions : undefined}
             dyingStateIds={appMode === 'SIMULATING' ? sim.dyingStateIds : undefined}
             firedTransitions={appMode === 'SIMULATING' ? sim.firedTransitions : undefined}
             simulationStepIndex={appMode === 'SIMULATING' ? sim.stepIndex : undefined}
+            startArrowHighlighted={
+              appMode === 'SIMULATING'
+              && sim.status !== 'finished'
+              && (sim.simulation === null || sim.stepIndex === 0)
+            }
             highlightedStateId={highlightedStateId}
             highlightedTransition={highlightedTransition}
             pickMode={canvasPickMode}

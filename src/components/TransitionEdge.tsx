@@ -28,9 +28,6 @@ type TransitionEdgeProp = {
   /** GraphViz-computed label position */
   labelPosition: { x: number; y: number };
 
-  /** Whether this transition is the next one to be taken during simulation */
-  isNextTransition?: boolean | undefined;
-
   /** Whether this transition is the active highlight target of a notification */
   isHighlighted?: boolean | undefined;
 
@@ -81,7 +78,6 @@ export function TransitionEdge(props: TransitionEdgeProp) {
     arrowheadPosition,
     arrowheadAngle,
     labelPosition,
-    isNextTransition = false,
     isHighlighted = false,
     justFired = false,
     previewKind,
@@ -102,13 +98,14 @@ export function TransitionEdge(props: TransitionEdgeProp) {
     })
     .join(', ');
 
-  // Color priority: notification highlight (red) > active preview > simulation next > default.
-  // The notification system can only highlight one edge at a time and is
-  // user-driven (clicking an alphabet badge etc.), so it should never collide
-  // with an in-progress preview in practice — but if it ever did, we want
-  // the click-driven highlight to win so the user sees what they asked for.
-  let edgeColor = isNextTransition ? '#2563eb' : '#334155'; // --blue-600 : --text-body
-  let edgeStrokeWidth = isNextTransition ? 3 : STROKE_WIDTH;
+  // Color priority: notification highlight (red) > active preview > just-fired
+  // > default. The notification system can only highlight one edge at a time
+  // and is user-driven (clicking an alphabet badge etc.), so it should never
+  // collide with an in-progress preview in practice — but if it ever did, we
+  // want the click-driven highlight to win so the user sees what they asked
+  // for.
+  let edgeColor = '#334155'; // --text-body
+  let edgeStrokeWidth = STROKE_WIDTH;
   let highlightClass: string | undefined = undefined;
 
   if (previewKind !== undefined) {
@@ -116,10 +113,13 @@ export function TransitionEdge(props: TransitionEdgeProp) {
     edgeStrokeWidth = 3;
     highlightClass = `pulse-canvas pulse-canvas-${previewKind}`;
   }
-  // Just-fired pulse for the most recent simulation step. Layered after
-  // previewKind because preview edges only exist in EDIT mode and fired
-  // edges only exist in SIMULATE mode — they shouldn't both apply, but
-  // if they did the simulation visual is more time-sensitive.
+  // Just-fired styling for the most recent simulation step — the "trail"
+  // that shows where the automaton just came from. Steady-state coloring
+  // persists between steps; the `edge-just-fired` class adds a one-shot
+  // pulse animation, re-triggered each step via the parent's key change.
+  // Layered after previewKind because preview edges only exist in EDIT mode
+  // and fired edges only exist in SIMULATE mode — they shouldn't both apply,
+  // but if they did the simulation visual is more time-sensitive.
   if (justFired) {
     edgeColor = '#2563eb'; // blue-600
     edgeStrokeWidth = 3;
@@ -196,7 +196,7 @@ export function TransitionEdge(props: TransitionEdgeProp) {
         textAnchor="middle"
         dominantBaseline="middle"
         fontSize="14px"
-        fontWeight={isNextTransition ? 'bold' : 'normal'}
+        fontWeight={justFired ? 'bold' : 'normal'}
         fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
       >
         {showSymbolDiff ? (

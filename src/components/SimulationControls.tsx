@@ -12,7 +12,6 @@ import { SIMULATION_SPEED_MIN, SIMULATION_SPEED_MAX } from '../ui-state/constant
 type SimulationControlsProp = {
   status: SimulationStatus;
   hasSimulation: boolean;
-  hasInput: boolean;
   accepted: boolean | null;
   speed: number;
   input: string;
@@ -46,7 +45,6 @@ function closestPreset(speedMs: number): SpeedPreset {
 export function SimulationControls({
   status,
   hasSimulation,
-  hasInput,
   accepted,
   speed,
   input,
@@ -69,13 +67,13 @@ export function SimulationControls({
     const id = window.setTimeout(() => playButtonRef.current?.focus(), 0);
     return () => window.clearTimeout(id);
   }, [playFocusSignal]);
-  // Step is only valid when there are unconsumed input symbols. Once the
-  // simulation finishes, Step is disabled (use Back to step backwards or
-  // edit the input to start over).
-  const canStep = (hasSimulation || hasInput) && (status === 'idle' || status === 'paused');
+  // Step / Play remain available as long as the engine isn't actively
+  // running. Empty input is a valid simulation (the empty string ε) —
+  // pressing Play runs to completion and the result depends on whether
+  // the start state is also an accept state (modulo ε-closure for NFAs).
+  const canStep = status === 'idle' || status === 'paused';
   // Play allows replay from a finished state — re-initialises and runs.
-  const canPlay =
-    (hasSimulation || hasInput) && (status === 'idle' || status === 'paused' || status === 'finished');
+  const canPlay = status === 'idle' || status === 'paused' || status === 'finished';
   const canPause = status === 'running';
 
   const activePreset = closestPreset(speed);
@@ -121,19 +119,17 @@ export function SimulationControls({
           }}
         >
           {input.length === 0 && (
-            <span style={{
-              color: 'var(--text-secondary)',
-              fontSize: 'var(--text-sm)',
-              fontFamily: 'var(--font-sans)',
-              letterSpacing: 'normal',
-            }}>
-              Type a string to simulate
+            // Dim ε in the mono strip — communicates "the empty string is
+            // a valid input to test" and is visually distinct from a
+            // placeholder hint ("type something").
+            <span style={{ color: 'var(--text-secondary)' }}>
+              ε
             </span>
           )}
           {input.length > 0 && [...input].map((character, index) => {
             const isConsumed = hasSimulation && index < consumedCount;
             const isNext = hasSimulation && index === consumedCount;
-            const isClickable = hasInput;
+            const isClickable = true;
 
             const baseColor = isConsumed
               ? 'var(--text-consumed)'

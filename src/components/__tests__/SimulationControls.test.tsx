@@ -2,8 +2,9 @@
  * @vitest-environment jsdom
  *
  * RTL tests for SimulationControls. Focused on the button enable/disable
- * matrix across simulation status × hasSimulation × hasInput, and click
- * dispatch on each control. Result banner copy is also asserted.
+ * matrix across simulation status × hasSimulation, click dispatch on each
+ * control, and the ε placeholder shown when input is empty. Result banner
+ * copy is also asserted.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -15,7 +16,6 @@ function defaultProps() {
   return {
     status: 'idle' as const,
     hasSimulation: false,
-    hasInput: true,
     accepted: null,
     speed: SIMULATION_SPEED_MAX,
     input: 'abc',
@@ -139,9 +139,16 @@ describe('SimulationControls', () => {
     expect(props.onJumpTo).toHaveBeenCalledWith(1);
   });
 
-  it('shows a placeholder when input is empty', () => {
-    const props = { ...defaultProps(), input: '', hasInput: false };
+  it('shows a dim ε glyph in the progress strip when input is empty', () => {
+    const props = { ...defaultProps(), input: '' };
     const { getByText } = render(<SimulationControls {...props} />);
-    expect(getByText('Type a string to simulate')).toBeTruthy();
+    expect(getByText('ε')).toBeTruthy();
+  });
+
+  it('Play is enabled when input is empty (empty-string ε is a valid run)', () => {
+    const props = { ...defaultProps(), input: '' };
+    const { getByText } = render(<SimulationControls {...props} />);
+    const button = getByText('Play').closest('button') as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
   });
 });

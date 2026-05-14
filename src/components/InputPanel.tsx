@@ -4,12 +4,11 @@
  * Text input for entering test strings with per-keystroke alphabet validation.
  * Always editable — modifying the input auto-resets the simulation.
  *
- * Includes a "Test batch" pill below the input that opens the
- * BatchTestModal — the companion surface for "I want to run 30
- * strings and see a table" instead of stepping through one at a time.
+ * The "Batch test" entry point lives in the top CommandBar (SIMULATE
+ * segment) rather than inline here — same pattern as the EDIT-mode
+ * Tools button, and stops the pill from fighting the input for space
+ * in this narrow panel.
  */
-
-import { ListChecks } from 'lucide-react';
 
 type InputPanelProp = {
   /** The automaton's alphabet — used for input validation */
@@ -20,17 +19,12 @@ type InputPanelProp = {
 
   /** Called when input changes (after filtering invalid characters) */
   onInputChange: (value: string) => void;
-
-  /** Opens the batch-test modal. Optional so older callers / tests can
-   *  omit it. */
-  onOpenBatchTest?: () => void;
 };
 
 export function InputPanel({
   alphabet,
   input,
   onInputChange,
-  onOpenBatchTest,
 }: InputPanelProp) {
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const rawValue = event.target.value;
@@ -60,21 +54,6 @@ export function InputPanel({
         onChange={handleChange}
         placeholder={`Symbols: ${alphabetDisplay}`}
       />
-
-      {onOpenBatchTest && (
-        <div className="batch-test-trigger-row">
-          <button
-            type="button"
-            className="batch-test-trigger"
-            onClick={onOpenBatchTest}
-            title="Run many input strings against the FA at once"
-            aria-label="Open batch test"
-          >
-            <ListChecks size={12} />
-            <span>Batch test</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }

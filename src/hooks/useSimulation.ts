@@ -24,7 +24,7 @@
  *   ANY → initialize → idle
  */
 
-import { useReducer, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { Automaton, Simulation } from '../engine/types';
 import {
   createSimulation,
@@ -32,7 +32,6 @@ import {
   isFinished as engineIsFinished,
   isAccepted as engineIsAccepted,
 } from '../engine/simulator';
-import { getTransition } from '../engine/automaton';
 import {
   SIMULATION_SPEED_MIN,
   SIMULATION_SPEED_MAX,
@@ -341,40 +340,6 @@ export function useSimulation(automaton: Automaton) {
       ? engineIsAccepted(simulation)
       : null;
 
-  // Every possible "next transition" — every (state, symbol → dest) edge
-  // that will fire on the next step. For DFAs there's at most one; for
-  // NFAs there can be 0..N (one per active state per matching dest).
-  // Empty if the simulation is finished or every active branch has no
-  // outgoing transition for the next symbol.
-  //
-  // Memoized so renders that don't change the active set or pending
-  // input (e.g. unrelated UI state changes) reuse the previous array.
-  // For larger NFAs this saves an O(active × transitions) scan per
-  // render.
-  const nextTransitions: ReadonlyArray<{
-    fromStateId: number;
-    toStateId: number;
-    symbol: string;
-  }> = useMemo(() => {
-    if (simulation === null || engineIsFinished(simulation)) return [];
-    if (simulation.currentStates.size === 0) return [];
-    const nextSymbol = simulation.remainingInput[0]!;
-    const result: Array<{ fromStateId: number; toStateId: number; symbol: string }> = [];
-    for (const currentState of simulation.currentStates) {
-      const transitions = getTransition(automaton, currentState, nextSymbol);
-      for (const transition of transitions) {
-        for (const dest of transition.to) {
-          result.push({
-            fromStateId: currentState,
-            toStateId: dest,
-            symbol: nextSymbol,
-          });
-        }
-      }
-    }
-    return result;
-  }, [automaton, simulation]);
-
   // Dying state IDs from the most recent step — drives the branch-death
   // pulse. Only populated immediately after a step that killed branches;
   // step-back returns to a previous step (which may or may not have its
@@ -438,7 +403,6 @@ export function useSimulation(automaton: Automaton) {
     stepIndex,
     consumedCount,
     accepted,
-    nextTransitions,
     dyingStateIds,
     firedTransitions,
 

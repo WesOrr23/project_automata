@@ -496,32 +496,3 @@
   border-color: transparent;
 }
 
-/* The "Test batch" trigger lives at the bottom-right of the input
- * field's containing div. Small ghost button so it doesn't fight the
- * input visually. */
-.batch-test-trigger-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.batch-test-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  font-size: var(--text-xs, 11px);
-  font-weight: var(--weight-medium, 500);
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.batch-test-trigger:hover {
-  background: var(--bg-button-hover);
-  color: var(--text-heading);
-  border-color: var(--text-secondary);
-}

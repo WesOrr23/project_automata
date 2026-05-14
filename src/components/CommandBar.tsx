@@ -6,10 +6,14 @@
  *   FILE segment (always visible)
  *     ▸ filename (click to rename inline) + dirty dot
  *     ▸ [📂 File ▾]  — single dropdown with: New, Open, Save,
- *       Save As, divider, Recents. Keyboard shortcuts hit the
- *       actions directly without opening the menu. (Show tour
- *       lives on the canvas's HelpCircle button next to the zoom
- *       controls — no longer in this menu.)
+ *       Save As, divider, Export as PNG, Export as SVG, transparent-
+ *       background toggle, divider, Recents. "Save" and "Export"
+ *       live under one menu because from the user's perspective
+ *       they're both "preserve this in some format" — splitting
+ *       them across the bar made the choice feel like a technical
+ *       branch (project file vs render) rather than a single
+ *       format pick. Keyboard shortcuts (⌘N/O/S/⇧S) still hit the
+ *       project-file actions directly.
  *
  *   HISTORY segment (visible in DEFINING / EDITING; always present
  *     in those stages, buttons are disabled when their stack is empty)
@@ -21,15 +25,9 @@
  *   EDIT segment (visible only when appMode === 'EDITING')
  *     ▸ [🔧 Operations]
  *
- *   SIMULATE segment (visible in SIMULATING + VIEWING)
- *     ▸ [🖼 Export ▾]  — popover offering PNG and SVG.
- *       Lives here because exporting a snapshot is a "looking at
- *       the FA" activity, not an editing one. Available in Simulate
- *       (validating the FA) and in Viewing (no tab open — user is
- *       just inspecting the canvas). Hidden in Define / Construct
- *       so the bar stays focused on edit affordances during edits.
- *
- *   SIMULATE segment (reserved; nothing renders yet)
+ *   SIMULATE segment (visible only when appMode === 'SIMULATING')
+ *     ▸ [✓ Batch test]  — opens the batch-test modal. Mirrors the
+ *       EDIT-mode Tools button placement.
  *
  * Mode-specific segments mount/unmount via AnimatePresence so the
  * bar morphs smoothly between modes.
@@ -57,7 +55,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useKeyboardScope } from '../hooks/useKeyboardScope';
 import {
   FilePlus, FolderOpen, Save, Undo2, Redo2, X,
-  History, Wrench, Image as ImageIcon, FileCode,
+  History, Wrench, Image as ImageIcon, FileCode, ListChecks,
 } from 'lucide-react';
 import type { RecentEntry } from '../files/recentsStore';
 
@@ -137,6 +135,13 @@ type CommandBarProp = {
    *  entirely (useful while we're still in CONFIG/SIMULATE — caller
    *  should also gate visibility on appMode). */
   operationsCategories: ReadonlyArray<OperationsCategory>;
+
+  // ─── Simulate segment ───
+  /** Opens the batch-test modal. Only rendered when appMode is
+   *  SIMULATING — batch-running inputs only makes sense once you're
+   *  actually exercising the FA. Optional so older test fixtures can
+   *  omit it. */
+  onOpenBatchTest?: () => void;
 };
 
 function formatRelative(iso: string): string {
@@ -161,7 +166,7 @@ const segmentMotion = {
   transition: { duration: 0.25, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] },
 };
 
-type ActivePopover = 'file' | 'operations' | 'export' | null;
+type ActivePopover = 'file' | 'operations' | null;
 
 export function CommandBar({
   appMode,
@@ -182,6 +187,7 @@ export function CommandBar({
   onUndo,
   onRedo,
   operationsCategories,
+  onOpenBatchTest,
 }: CommandBarProp) {
   const [activePopover, setActivePopover] = useState<ActivePopover>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -350,7 +356,7 @@ export function CommandBar({
             click; the bar just stops being a row of mystery icons. */}
         <button
           type="button"
-          className={`command-bar-button command-bar-button-text${activePopover === 'file' ? ' command-bar-button-active' : ''}${(openLoading || saveLoading || saveAsLoading) ? ' command-bar-button-loading' : ''}`}
+          className={`command-bar-button command-bar-button-text${activePopover === 'file' ? ' command-bar-button-active' : ''}${(openLoading || saveLoading || saveAsLoading || exportPNGLoading) ? ' command-bar-button-loading' : ''}`}
           onClick={() => togglePopover('file')}
           aria-label="File menu"
           aria-haspopup="menu"
@@ -421,6 +427,62 @@ export function CommandBar({
               <span className="command-bar-popover-item-label-inline">Save As…</span>
               <span className="command-bar-popover-item-shortcut">{modGlyph}{shiftGlyph}S</span>
             </button>
+
+            {/* Export items live in the same menu as Save / Save As —
+                "saving as an image" is a sibling of "saving as a project
+                file" from the user's perspective, even though one is
+                project state and the other is a rendered snapshot. The
+                Transparent-background toggle applies to both formats and
+                is sticky for the session. */}
+            {(onExportPNG || onExportSVG) && (
+              <>
+                <div className="command-bar-popover-divider" role="separator" />
+                <span className="command-bar-popover-label">Export as image</span>
+                {onExportPNG && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`command-bar-popover-item${exportPNGLoading ? ' command-bar-popover-item-loading' : ''}`}
+                    onClick={() => {
+                      setActivePopover(null);
+                      void withLoading(setExportPNGLoading, () => onExportPNG(exportTransparent));
+                    }}
+                    disabled={exportPNGLoading}
+                    aria-busy={exportPNGLoading}
+                    title="Save the current canvas as a PNG image"
+                  >
+                    <ImageIcon size={16} strokeWidth={2} />
+                    <span className="command-bar-popover-item-label-inline">PNG image</span>
+                  </button>
+                )}
+                {onExportSVG && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="command-bar-popover-item"
+                    onClick={() => {
+                      setActivePopover(null);
+                      onExportSVG(exportTransparent);
+                    }}
+                    title="Save the current canvas as an SVG file"
+                  >
+                    <FileCode size={16} strokeWidth={2} />
+                    <span className="command-bar-popover-item-label-inline">SVG image</span>
+                  </button>
+                )}
+                <label
+                  className="command-bar-popover-toggle"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={exportTransparent}
+                    onChange={(e) => setExportTransparent(e.target.checked)}
+                  />
+                  <span>Transparent background</span>
+                </label>
+              </>
+            )}
 
             <div className="command-bar-popover-divider" role="separator" />
 
@@ -565,86 +627,30 @@ export function CommandBar({
         )}
       </AnimatePresence>
 
-      {/* ─── SIMULATE segment — image export. Lives here (vs in the
-            File menu) because exporting a snapshot is what the user
-            does AFTER they've validated the FA in Simulate; surfacing
-            it on the simulate stage matches that workflow moment.
-            Single Export button with a popover offers PNG / SVG. ─── */}
+      {/* ─── SIMULATE segment — batch test. Mirrors the EDITING-mode
+            Tools button: a stage-specific utility that gets proper
+            horizontal real-estate in the bar rather than fighting the
+            input field for space inside the panel. Only renders in
+            SIMULATING (not VIEWING) — batch-running inputs is an
+            actively-simulating activity, not a "just looking" one. */}
       <AnimatePresence initial={false}>
-        {(appMode === 'SIMULATING' || appMode === 'VIEWING') && (onExportPNG || onExportSVG) && (
-          <motion.div key="simulate-segment" className="command-bar-segment" {...segmentMotion}>
+        {appMode === 'SIMULATING' && onOpenBatchTest && (
+          <motion.div key="batch-test-segment" className="command-bar-segment" {...segmentMotion}>
             <div className="command-bar-divider" aria-hidden="true" />
             <button
               type="button"
-              className={`command-bar-button command-bar-button-text${activePopover === 'export' ? ' command-bar-button-active' : ''}${exportPNGLoading ? ' command-bar-button-loading' : ''}`}
-              onClick={() => togglePopover('export')}
-              aria-label="Export"
-              aria-haspopup="menu"
-              aria-expanded={activePopover === 'export'}
-              title="Export the current canvas as an image"
+              className="command-bar-button command-bar-button-text"
+              onClick={onOpenBatchTest}
+              aria-label="Open batch test"
+              title="Run many input strings against the FA at once"
             >
-              <ImageIcon size={14} />
-              <span>Export</span>
+              <ListChecks size={14} />
+              <span>Batch test</span>
             </button>
-
-            {activePopover === 'export' && (
-              <div className="command-bar-popover command-bar-popover-export-anchor" role="menu">
-                {onExportPNG && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`command-bar-popover-item${exportPNGLoading ? ' command-bar-popover-item-loading' : ''}`}
-                    onClick={() => {
-                      setActivePopover(null);
-                      void withLoading(setExportPNGLoading, () => onExportPNG(exportTransparent));
-                    }}
-                    disabled={exportPNGLoading}
-                    aria-busy={exportPNGLoading}
-                    title="Save the current canvas as a PNG image"
-                  >
-                    <ImageIcon size={16} strokeWidth={2} />
-                    <span className="command-bar-popover-item-label-inline">PNG image</span>
-                  </button>
-                )}
-                {onExportSVG && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="command-bar-popover-item"
-                    onClick={() => {
-                      setActivePopover(null);
-                      onExportSVG(exportTransparent);
-                    }}
-                    title="Save the current canvas as an SVG file"
-                  >
-                    <FileCode size={16} strokeWidth={2} />
-                    <span className="command-bar-popover-item-label-inline">SVG image</span>
-                  </button>
-                )}
-
-                <div className="command-bar-popover-divider" role="separator" />
-
-                {/* Transparent-background toggle. Shared between PNG
-                    and SVG. Defaults off (white background) since
-                    that's what most pasted-into-slides use cases
-                    want; off-by-default also matches the SVG that
-                    has historically been delivered. */}
-                <label
-                  className="command-bar-popover-toggle"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <input
-                    type="checkbox"
-                    checked={exportTransparent}
-                    onChange={(e) => setExportTransparent(e.target.checked)}
-                  />
-                  <span>Transparent background</span>
-                </label>
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }
