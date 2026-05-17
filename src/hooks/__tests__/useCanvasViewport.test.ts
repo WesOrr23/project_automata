@@ -182,6 +182,12 @@ describe('useCanvasViewport', () => {
     const svg = {
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
+      // The hook now reads the SVG's bounding rect on every
+      // pointerdown/move so it can store pointer positions in
+      // SVG-relative coordinates (needed for the pinch-anchor math).
+      // Tests run against {left: 0, top: 0} so client coordinates pass
+      // through unchanged — pan deltas are unaffected.
+      getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
     };
 
     act(() => {
@@ -225,6 +231,12 @@ describe('useCanvasViewport', () => {
     const svg = {
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
+      // The hook now reads the SVG's bounding rect on every
+      // pointerdown/move so it can store pointer positions in
+      // SVG-relative coordinates (needed for the pinch-anchor math).
+      // Tests run against {left: 0, top: 0} so client coordinates pass
+      // through unchanged — pan deltas are unaffected.
+      getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
     };
 
     act(() => {
@@ -247,6 +259,47 @@ describe('useCanvasViewport', () => {
       } as unknown as React.PointerEvent<SVGSVGElement>);
     });
     expect(result.current.viewport).toEqual({ scale: 1, panX: 0, panY: 0 });
+  });
+
+  it('two-pointer pinch scales around the gesture midpoint', () => {
+    // Pointers down at (100, 100) and (200, 100) → midpoint (150, 100),
+    // distance 100. Then pointer 2 moves to (250, 100) → distance 150
+    // (scale factor 1.5) and midpoint (175, 100). The world point that
+    // was under (150, 100) should still be under (175, 100) after the
+    // transform — that's the anchor-at-prev-midpoint + translate-to-
+    // next-midpoint formulation.
+    const { result } = setupHook();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const svg = {
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
+    };
+    act(() => {
+      result.current.handlers.onPointerDown({
+        button: 0, pointerId: 1, clientX: 100, clientY: 100,
+        target, currentTarget: svg as unknown as SVGSVGElement,
+      } as unknown as React.PointerEvent<SVGSVGElement>);
+    });
+    act(() => {
+      result.current.handlers.onPointerDown({
+        button: 0, pointerId: 2, clientX: 200, clientY: 100,
+        target, currentTarget: svg as unknown as SVGSVGElement,
+      } as unknown as React.PointerEvent<SVGSVGElement>);
+    });
+    act(() => {
+      result.current.handlers.onPointerMove({
+        pointerId: 2, clientX: 250, clientY: 100,
+        currentTarget: svg as unknown as SVGSVGElement,
+      } as unknown as React.PointerEvent<SVGSVGElement>);
+    });
+    // worldX at prev-mid (150, 100), scale 1, pan 0 → world = (150, 100).
+    // newScale = 1.5; newPanX = nextMid.x - world.x * newScale
+    //          = 175 - 150 * 1.5 = -50; newPanY = 100 - 100 * 1.5 = -50.
+    expect(result.current.viewport.scale).toBeCloseTo(1.5, 5);
+    expect(result.current.viewport.panX).toBeCloseTo(-50, 5);
+    expect(result.current.viewport.panY).toBeCloseTo(-50, 5);
   });
 
   it('fitToContent scales content to fit viewport with padding and centers it', () => {

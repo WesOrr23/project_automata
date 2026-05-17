@@ -1,0 +1,224 @@
+/* ===================================
+   Mobile — overrides for narrow viewports
+
+   This file pursues a single tactic: redefine the layout TOKENS for
+   narrow viewports, and let the feature stylesheets pick up the
+   changes through `var()` references. Selectors are kept as a last
+   resort for things that genuinely need different rules (label
+   visibility, popover constraints) rather than just different
+   numbers.
+
+   Anything above 640px renders the desktop layout unchanged.
+   =================================== */
+
+@media (max-width: 640px) {
+  :root {
+    /* Tool menu — OPEN was 280px on desktop, which leaves a ~55px
+     * canvas sliver on a 375px phone. Cap to ~viewport width minus
+     * margins so the menu reads as a near-full-width sheet over the
+     * canvas. COLLAPSED (52px rail) stays. EXPANDED is hover-only on
+     * desktop — touch users can't reach it, so leaving its width
+     * alone has no visible effect. */
+    --tool-menu-open-width: min(calc(100vw - 32px), 340px);
+
+    /* Touch targets — bump from 32 to 44 to satisfy the iOS / Material
+     * minimum. Affects CommandBar buttons + canvas zoom controls + the
+     * tool-menu row hit areas; the icons stay the same size, just sit
+     * in larger circles. */
+    --control-button-size: 44px;
+    --tool-menu-row-height: 44px;
+
+    /* Filename truncates harder when the bar is icon-only and
+     * everything competes for the remaining width. */
+    --command-bar-filename-max: 96px;
+  }
+
+  /* ─── CommandBar — icon-only at mobile widths ───
+   *
+   * The bar grows along with the active stage (Construct adds undo/redo
+   * + Tools, Simulate adds Batch test). On a 375px phone the labeled
+   * buttons overflow horizontally before the user gets to Simulate. We
+   * keep the icons but drop the labels — they're recognisable on their
+   * own (Wrench for Tools, ListChecks for Batch test, FolderOpen for
+   * File). The `title` attribute and `aria-label` still surface the
+   * label for screen readers and long-press tooltips.
+   */
+  .command-bar {
+    max-width: calc(100vw - 16px);
+    gap: var(--space-1);
+    padding: var(--space-1) 6px;
+  }
+
+  .command-bar-button-text {
+    padding: 0 var(--space-1);
+    gap: 0;
+  }
+
+  .command-bar-button-text > span {
+    display: none;
+  }
+
+  /* When the bar's buttons become icon-only the filename's bold weight
+   * dominates visually. Drop to body weight + smaller size for balance. */
+  .command-bar-filename {
+    font-size: var(--text-xs);
+  }
+
+  /* ─── Popovers — constrain to viewport ───
+   *
+   * Anchored popovers (File, Tools) live below their trigger buttons
+   * via position: absolute. On a narrow viewport they can overflow
+   * off-screen. Cap their max-width to the viewport and allow vertical
+   * scroll when content overflows (long Recents lists, multi-section
+   * Tools menus).
+   */
+  .command-bar-popover {
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  /* ─── Desktop ToolMenu hidden on mobile ───
+   *
+   * The left-rail tool menu is replaced by MobileToolMenu (bottom tab
+   * bar + slide-up sheet). App.tsx branches on useIsMobile() so the
+   * desktop component isn't even rendered on mobile, but we keep this
+   * rule as a backstop for any momentary mismatch between media-query
+   * state and React render (e.g. during a viewport flip).
+   */
+  .tool-menu {
+    display: none;
+  }
+
+  /* Raise the zoom-controls cluster (zoom in/out + fit + help) above
+   * the bottom tab bar so it stays reachable. The tab bar is ~56px
+   * tall plus the safe-area inset; adding both keeps the cluster
+   * clear regardless of device. */
+  .canvas-bottom-right-stack {
+    bottom: calc(56px + 16px + env(safe-area-inset-bottom, 0));
+  }
+}
+
+/* ─── Mobile bottom-nav + sheet ───
+ *
+ * These rules are scoped to the @media block only via the components
+ * being rendered (MobileToolMenu is only mounted when useIsMobile()
+ * is true). We keep them OUTSIDE the @media block so the sheet's
+ * animation transforms stay consistent if the viewport flips
+ * mid-gesture — but the components themselves won't render in the
+ * desktop tree, so these styles only matter on mobile in practice.
+ */
+.mobile-tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border-subtle);
+  /* Respect the iOS home-bar safe area so tabs don't sit under the
+   * gesture indicator. env() falls back to 0 on Android / desktop. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.06);
+}
+
+.mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* Touch-friendly target — 44px clear + space for the label below. */
+  min-height: 56px;
+  padding: var(--space-2) var(--space-1);
+  background: transparent;
+  border: none;
+  color: var(--text-body);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mobile-tab:active {
+  background: var(--bg-button-hover);
+}
+
+.mobile-tab-active {
+  color: var(--blue-600);
+  font-weight: var(--weight-bold);
+}
+
+.mobile-tab-label {
+  line-height: 1;
+}
+
+.mobile-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Tinted-glass backdrop so the canvas behind is still visible —
+   * the user can still see the FA they're editing while a panel is
+   * open. Heavier than the modal backdrop (which fully dims) on
+   * purpose: this isn't a modal, it's a contextual panel. */
+  background: rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(2px);
+  /* Sit below the sheet + tab bar but above the canvas. */
+  z-index: 20;
+}
+
+.mobile-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* Sit above the tab bar (which is approx 56–60px tall plus safe area). */
+  bottom: calc(56px + env(safe-area-inset-bottom, 0));
+  z-index: 24;
+  max-height: 75vh;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border-subtle);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mobile-sheet-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  color: var(--text-heading);
+}
+
+.mobile-sheet-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-button-size);
+  height: var(--control-button-size);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.mobile-sheet-close:active {
+  background: var(--bg-button-hover);
+}
+
+.mobile-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+}

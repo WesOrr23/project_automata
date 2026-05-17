@@ -77,12 +77,15 @@
    * Setting width = 52 makes icon-right = 16 → symmetric. Picking the
    * width here means the same `padding: 0 6` rule that EXPANDED uses
    * also reads as centered in COLLAPSED, so the icon doesn't shift
-   * during the COLLAPSED→EXPANDED hover transition. */
-  width: 52px;
-  /* Fits 3 rows: 3×32 + 2×4 (gaps) + 2×8 (padding) = 120. File has
-   * left the menu and now lives in the top-center CommandBar widget,
-   * so the tool menu is back to the workflow-ladder size. */
-  max-height: 120px;
+   * during the COLLAPSED→EXPANDED hover transition.
+   *
+   * Tokenized via --tool-menu-collapsed-width so mobile.css can
+   * adjust it without re-declaring this entire rule. */
+  width: var(--tool-menu-collapsed-width);
+  /* Fits 3 rows. Computed from the row-height token so the menu also
+   * accommodates the touch-target bump on mobile (44px rows vs 32px):
+   *   3 rows + 2 inter-row gaps (space-1) + 2 outer-padding (space-2). */
+  max-height: calc(3 * var(--tool-menu-row-height) + 2 * var(--space-1) + 2 * var(--space-2));
   border-radius: 26px;
   transition:
     height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -143,9 +146,9 @@
  * staged delay only applies to opening, not to closing back through
  * EXPANDED on its way to COLLAPSED. */
 .tool-menu-expanded {
-  width: 152px;
+  width: var(--tool-menu-expanded-width);
   /* Match COLLAPSED — see note there for the 3-tab math. */
-  max-height: 120px;
+  max-height: calc(3 * var(--tool-menu-row-height) + 2 * var(--space-1) + 2 * var(--space-2));
   border-radius: var(--radius-md);
   transition:
     height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -162,7 +165,7 @@
  * height-auto animation duration) so the container's cap doesn't
  * outrun the panel's natural-height growth. */
 .tool-menu-open {
-  width: 280px;
+  width: var(--tool-menu-open-width);
   max-height: 95vh;
   border-radius: var(--radius-md);
   transition:
@@ -187,8 +190,8 @@
  */
 .tool-menu-row {
   width: 100%;
-  height: 32px;
-  flex: 0 0 32px;
+  height: var(--tool-menu-row-height);
+  flex: 0 0 var(--tool-menu-row-height);
   display: flex;
   align-items: center;
   gap: var(--space-2);

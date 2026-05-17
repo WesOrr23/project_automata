@@ -233,13 +233,17 @@ export function useCanvasViewport(
   const [viewport, setViewport] = useState<CanvasViewport>(DEFAULT_VIEWPORT);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Drag state lives in a ref — it doesn't drive renders, just bookkeeping
-  // for the in-progress pan gesture.
-  const dragRef = useRef<{
-    pointerId: number;
-    lastX: number;
-    lastY: number;
-  } | null>(null);
+  // Active pointers indexed by pointerId. With one entry → pan
+  // (delta-based). With two entries → pinch-zoom + translation around the
+  // gesture midpoint. Three or more entries are ignored beyond pan/pinch
+  // semantics (we still track them so removing one doesn't cause a jump).
+  //
+  // Coordinates are stored in CSS pixels RELATIVE TO THE SVG element so
+  // they line up with the zoom-anchor math used elsewhere in the hook
+  // (which works in SVG-relative coordinates). Translation from
+  // window-relative clientX/Y happens at the gesture boundary.
+  type PointerSample = { x: number; y: number };
+  const pointersRef = useRef<Map<number, PointerSample>>(new Map());
 
   // Refs for the latest sizes so callbacks captured by event listeners
   // always read fresh values without re-binding handlers every render.
@@ -605,14 +609,18 @@ export function useCanvasViewport(
   );
 
   /**
-   * Pointer-down on empty canvas starts a pan gesture. We skip drags
-   * that originated on a state node or transition edge so those
-   * gestures stay free for clicks (drag-on-state would otherwise pan
-   * AND register as a click, which is jarring).
+   * Pointer-down: register the pointer in the active set. Drags that
+   * originate on a state node or transition edge are SKIPPED so those
+   * gestures stay free for clicks (a touch on a state shouldn't also
+   * pan or pinch the canvas).
+   *
+   * Note: `event.button !== 0` filters non-primary MOUSE buttons. Touch
+   * and pen pointers report `button === 0` for primary contact, so this
+   * doesn't accidentally exclude them.
    */
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
-      if (event.button !== 0) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
       const target = event.target as Element | null;
       if (target !== null) {
         // Walk up from the click target looking for an interactive
@@ -621,38 +629,126 @@ export function useCanvasViewport(
         if (target.closest('[data-state-id]')) return;
         if (target.closest('.transition-edge-clickable')) return;
       }
-      dragRef.current = {
-        pointerId: event.pointerId,
-        lastX: event.clientX,
-        lastY: event.clientY,
-      };
-      // setPointerCapture so we keep getting events even if the cursor
-      // leaves the SVG mid-drag.
-      event.currentTarget.setPointerCapture(event.pointerId);
+      const rect = event.currentTarget.getBoundingClientRect();
+      pointersRef.current.set(event.pointerId, {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+      // setPointerCapture so we keep getting events even if the finger
+      // / cursor leaves the SVG mid-gesture. Wrapped: synthetic /
+      // already-detached pointers throw InvalidStateError here, which
+      // is harmless — we still track the pointer in our map, we just
+      // don't get the cross-element capture benefit.
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // No active pointer with this ID — fine, continue without capture.
+      }
     },
     []
   );
 
+  /**
+   * Pointer-move: update the moving pointer's tracked position and
+   * apply the resulting transformation.
+   *
+   *  - 1 active pointer: pan by the position delta.
+   *  - 2 active pointers: combined pinch + translation. The previous
+   *    midpoint maps to the next midpoint, and the previous distance
+   *    maps to the next distance. That's a similarity transformation
+   *    (we drop rotation); decomposed it's a scale anchored at the
+   *    previous midpoint plus a translation by (next - previous)
+   *    midpoint delta.
+   *  - 3+ active pointers: extra fingers are tracked but don't change
+   *    the math — we still treat the gesture as 2-finger pinch using
+   *    the two pointers with the lowest IDs (= first to land).
+   */
   const onPointerMove = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
-      const drag = dragRef.current;
-      if (drag === null) return;
-      if (drag.pointerId !== event.pointerId) return;
-      const deltaX = event.clientX - drag.lastX;
-      const deltaY = event.clientY - drag.lastY;
-      drag.lastX = event.clientX;
-      drag.lastY = event.clientY;
-      panBy(deltaX, deltaY);
+      const pointers = pointersRef.current;
+      const prev = pointers.get(event.pointerId);
+      if (!prev) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const next: PointerSample = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+
+      if (pointers.size === 1) {
+        // Single-pointer pan.
+        const deltaX = next.x - prev.x;
+        const deltaY = next.y - prev.y;
+        pointers.set(event.pointerId, next);
+        panBy(deltaX, deltaY);
+        return;
+      }
+
+      // Multi-pointer: pick the two oldest (lowest IDs by insertion
+      // order — Map iteration is insertion-ordered in JS). One of them
+      // is the moving pointer; the other is the anchor "other finger."
+      const ids = Array.from(pointers.keys()).slice(0, 2);
+      if (!ids.includes(event.pointerId)) {
+        // Moving pointer is a third+ finger that doesn't influence the
+        // gesture. Still update its tracked position so a later removal
+        // doesn't reorder the primary pair, but don't transform.
+        pointers.set(event.pointerId, next);
+        return;
+      }
+      const otherId = ids.find((id) => id !== event.pointerId);
+      if (otherId === undefined) {
+        pointers.set(event.pointerId, next);
+        return;
+      }
+      const other = pointers.get(otherId);
+      if (!other) {
+        pointers.set(event.pointerId, next);
+        return;
+      }
+
+      const prevDist = Math.hypot(prev.x - other.x, prev.y - other.y);
+      const nextDist = Math.hypot(next.x - other.x, next.y - other.y);
+      const prevMid = { x: (prev.x + other.x) / 2, y: (prev.y + other.y) / 2 };
+      const nextMid = { x: (next.x + other.x) / 2, y: (next.y + other.y) / 2 };
+
+      // Update tracked position before the state update so a synchronous
+      // re-entry sees the latest sample.
+      pointers.set(event.pointerId, next);
+
+      // Distances below 1px are usually noise from a finger pivoting
+      // rather than actual pinch motion — skip the scale step to avoid
+      // wild ratios but still apply the midpoint translation.
+      if (prevDist < 1 || nextDist < 1) {
+        const dxMid = nextMid.x - prevMid.x;
+        const dyMid = nextMid.y - prevMid.y;
+        if (dxMid !== 0 || dyMid !== 0) panBy(dxMid, dyMid);
+        return;
+      }
+
+      const scaleFactor = nextDist / prevDist;
+      setViewport((current) => {
+        const newScale = clamp(current.scale * scaleFactor, MIN_SCALE, MAX_SCALE);
+        // World point under the previous midpoint stays under the next
+        // midpoint after the transform. That folds the scale-anchor +
+        // midpoint-translation into a single pan formula.
+        const worldX = (prevMid.x - current.panX) / current.scale;
+        const worldY = (prevMid.y - current.panY) / current.scale;
+        const newPanX = nextMid.x - worldX * newScale;
+        const newPanY = nextMid.y - worldY * newScale;
+        return clampViewport(
+          { scale: newScale, panX: newPanX, panY: newPanY },
+          contentBoxRef.current,
+          viewportSizeRef.current
+        );
+      });
     },
     [panBy]
   );
 
   const onPointerUp = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
-      const drag = dragRef.current;
-      if (drag === null) return;
-      if (drag.pointerId !== event.pointerId) return;
-      dragRef.current = null;
+      const pointers = pointersRef.current;
+      if (!pointers.has(event.pointerId)) return;
+      pointers.delete(event.pointerId);
       try {
         event.currentTarget.releasePointerCapture(event.pointerId);
       } catch {

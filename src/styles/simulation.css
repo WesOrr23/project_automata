@@ -313,7 +313,7 @@ button svg {
   font-weight: var(--weight-bold);
   color: var(--text-heading);
   font-family: var(--font-sans);
-  max-width: 280px;
+  max-width: var(--command-bar-filename-max);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -372,8 +372,8 @@ button svg {
 }
 
 .command-bar-button {
-  width: 32px;
-  height: 32px;
+  width: var(--control-button-size);
+  height: var(--control-button-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;

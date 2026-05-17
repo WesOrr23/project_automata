@@ -21,9 +21,11 @@ import { InputPanel } from './components/InputPanel';
 import { BatchTestModal } from './components/BatchTestModal';
 import { SimulationControls } from './components/SimulationControls';
 import { ToolMenu } from './components/toolMenu/ToolMenu';
+import { MobileToolMenu } from './components/toolMenu/MobileToolMenu';
 import { ConfigPanel } from './components/toolMenu/ConfigPanel';
 import { EditPanel } from './components/toolMenu/EditPanel';
 import { ToolMenuState, ToolTabID } from './components/toolMenu/types';
+import { useIsMobile } from './hooks/useMediaQuery';
 import { NotificationStack } from './notifications/NotificationStack';
 import { useNotifications } from './notifications/useNotifications';
 import type { NotificationTarget } from './notifications/types';
@@ -135,6 +137,11 @@ function App() {
   } = useUndoableAutomaton(initialSnapshot);
   const [inputString, setInputString] = useState('');
   const [menuState, setMenuState] = useState<ToolMenuState>({ mode: 'COLLAPSED' });
+  // Mobile layout swaps the left-anchored ToolMenu for a bottom tab bar
+  // + slide-up sheet (MobileToolMenu). Both consume the same panel
+  // content props, so the branch is purely about which chrome surface
+  // wraps them. Keyed off the same 640px breakpoint as mobile.css.
+  const isMobile = useIsMobile();
   // Bumped by Edit's "+ alphabet" jump-to button. ConfigPanel/AlphabetEditor
   // watch the value via useEffect and focus the input when it changes,
   // so the user lands in Define ready to type.
@@ -1105,16 +1112,30 @@ function App() {
 
   return (
     <>
-      <ToolMenu
-        state={menuState}
-        onHoverEvent={handleHoverEnter}
-        onHoverLeave={handleHoverLeave}
-        onTabClick={handleTabClick}
-        onCollapse={handleCollapse}
-        configContent={configContent}
-        editContent={editContent}
-        simulateContent={simulateContent}
-      />
+      {isMobile ? (
+        <MobileToolMenu
+          state={menuState}
+          onTabClick={handleTabClick}
+          // Mobile sheet "close" maps to COLLAPSED directly (skipping
+          // the desktop EXPANDED waypoint — it's a hover-only mode and
+          // has no meaning on touch).
+          onCollapse={() => setMenuState({ mode: 'COLLAPSED' })}
+          configContent={configContent}
+          editContent={editContent}
+          simulateContent={simulateContent}
+        />
+      ) : (
+        <ToolMenu
+          state={menuState}
+          onHoverEvent={handleHoverEnter}
+          onHoverLeave={handleHoverLeave}
+          onTabClick={handleTabClick}
+          onCollapse={handleCollapse}
+          configContent={configContent}
+          editContent={editContent}
+          simulateContent={simulateContent}
+        />
+      )}
 
       <NotificationStack />
 
@@ -1238,27 +1259,39 @@ function App() {
             creationSourceId={appMode === 'EDITING' ? creationState.source : null}
             creationDestinationId={appMode === 'EDITING' ? creationState.destination : null}
             creationStateKind={appMode === 'EDITING' ? creationStateKind(creationState) : null}
-            viewportInset={{
-              // Tool menu sits at left:16, takes ~48 (COLLAPSED) /
-              // ~152 (EXPANDED) / ~280 (OPEN). 16+width+~24 gap so
-              // centering doesn't crowd the menu's right edge.
-              left:
-                16 +
-                (menuState.mode === 'COLLAPSED' ? 52 :
-                 menuState.mode === 'EXPANDED' ? 152 : 280) +
-                24,
-              // Menu is vertically centered in the viewport via CSS
-              // (top:50%; translateY(-50%)). To make the FA's vertical
-              // center align with the menu's vertical center (=
-              // window vertical center), we use a SYMMETRIC vertical
-              // inset — top and bottom both reserve the same space.
-              // Otherwise the visible vertical center sits below the
-              // window center by half the top inset, and the FA looks
-              // 'too low' relative to the menu.
-              right: 0,
-              top: 16 + 48 + 8,
-              bottom: 16 + 48 + 8,
-            }}
+            viewportInset={
+              isMobile
+                ? {
+                    // Mobile: chrome lives at the TOP (CommandBar pill,
+                    // ~32 + 16 margin = 48 + breathing room) and the
+                    // BOTTOM (tab bar, 56 + safe-area). The sheet
+                    // overlays the canvas but is dismissable, so we
+                    // size the inset against the chrome at REST (sheet
+                    // closed). Left/right keep a small symmetric
+                    // margin so corners aren't crowded.
+                    left: 16,
+                    right: 16,
+                    top: 16 + 32 + 8,
+                    bottom: 16 + 56,
+                  }
+                : {
+                    // Desktop: tool menu sits at left:16, takes ~48
+                    // (COLLAPSED) / ~152 (EXPANDED) / ~280 (OPEN).
+                    // 16+width+~24 gap so centering doesn't crowd the
+                    // menu's right edge. Menu is vertically centered
+                    // via CSS (top:50%; translateY(-50%)). Symmetric
+                    // top/bottom inset keeps the FA's visual center
+                    // aligned with the window's vertical center.
+                    left:
+                      16 +
+                      (menuState.mode === 'COLLAPSED' ? 52 :
+                       menuState.mode === 'EXPANDED' ? 152 : 280) +
+                      24,
+                    right: 0,
+                    top: 16 + 48 + 8,
+                    bottom: 16 + 48 + 8,
+                  }
+            }
             onShowTour={onboarding.show}
             debugOverlay={debugOverlay.enabled}
             onSvgRefChange={handleSvgRefChange}

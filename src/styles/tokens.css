@@ -75,22 +75,39 @@
   --error-fill: #fee2e2;
   --error-stroke: #dc2626;
 
-  /* ─── Typography ─── */
+  /* ─── Typography ───
+   *
+   * Sizes are in rem so they scale with the root font-size. The root is
+   * the browser default (16px) unless explicitly overridden — mobile
+   * breakpoints can nudge the root smaller / larger to scale the entire
+   * type system together. User-level accessibility settings ("larger
+   * text" in OS / browser) also flow through automatically.
+   *
+   * The rem values are picked so 1rem = 16px renders the same byte
+   * counts as the previous px tokens (text-base = 0.875rem = 14px,
+   * etc.) — no visual change at default zoom on desktop.
+   */
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* 4 sizes */
-  --text-lg: 20px;
-  --text-base: 14px;
-  --text-sm: 12px;
-  --text-mono: 20px;
+  /* 4 sizes (rem-based) */
+  --text-lg: 1.25rem;     /* 20px @ 16px root */
+  --text-base: 0.875rem;  /* 14px @ 16px root */
+  --text-sm: 0.75rem;     /* 12px @ 16px root */
+  --text-xs: 0.6875rem;   /* 11px @ 16px root — was an inline fallback */
+  --text-mono: 1.25rem;   /* 20px @ 16px root */
 
   /* 2 weights */
   --weight-normal: 400;
   --weight-bold: 600;
 
-  /* ─── Spacing (4px grid) ─── */
+  /* ─── Spacing (4px grid) ───
+   *
+   * Spacing stays in px (not rem) so the grid is absolute — gaps don't
+   * grow disproportionately when type scales. The grid is the layout
+   * skeleton; type sits inside it.
+   */
 
   --space-1: 4px;
   --space-2: 8px;
@@ -113,6 +130,31 @@
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
   --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+
+  /* ─── Layout dimensions ───
+   *
+   * The dimensions that change between desktop and mobile breakpoints
+   * are tokenized here so mobile.css overrides them in one place
+   * (instead of duplicating selectors). Anything that stays the same
+   * across breakpoints (radii, line-thicknesses, etc.) is fine as a
+   * direct value in the feature CSS.
+   */
+
+  /* Tool menu — 3 widths for collapsed (icon rail) / expanded
+   * (hover-only preview) / open (active panel). Row height is the
+   * touch target for each tab. */
+  --tool-menu-collapsed-width: 52px;
+  --tool-menu-expanded-width: 152px;
+  --tool-menu-open-width: 280px;
+  --tool-menu-row-height: 32px;
+
+  /* Floating button sizes — used by CommandBar buttons + canvas zoom
+   * controls. iOS / Material guidelines recommend 44px minimum; we
+   * stay at 32 on desktop (mouse-target) and bump to 44 on mobile. */
+  --control-button-size: 32px;
+
+  /* CommandBar filename truncation — narrows on mobile. */
+  --command-bar-filename-max: 280px;
 
   /* ─── Sidebar ─── */
 

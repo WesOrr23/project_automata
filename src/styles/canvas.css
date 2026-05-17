@@ -180,8 +180,8 @@
 }
 
 .canvas-zoom-button {
-  width: 32px;
-  height: 32px;
+  width: var(--control-button-size);
+  height: var(--control-button-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
